@@ -1,0 +1,10 @@
+1. Make sure to have cmake installed.
+
+2. Generate build files using:
+     cmake CMakeLists.txt
+
+3. Build with your favorite build system. For make it would be:
+     make
+
+4. Enjoy!
+
