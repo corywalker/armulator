@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 2.6)
+PROJECT (armulator)
+INCLUDE_DIRECTORIES(include)
+SET(armulator_SRCS addrmode1.c arm940t.c cpsr.c main.c register.c util.c)
+SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+ADD_EXECUTABLE(armulator ${armulator_SRCS})
