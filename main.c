@@ -3,7 +3,7 @@
 int main()
 {
 	arm940t cpu = new_arm940t();
-	read_binary(&cpu, "test/test.bin");
+	read_binary(&cpu, "bin/test.bi");
 	debug(&cpu);
 	delete_arm940t(&cpu);
 	return 0;
