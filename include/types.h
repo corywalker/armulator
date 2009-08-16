@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-typedef struct {uint8_t id; uint32_t word; uint8_t cond; uint8_t char0; uint8_t char1;
+typedef struct {uint8_t group; uint8_t id; uint32_t word; uint8_t cond; uint8_t char0; uint8_t char1;
 	uint8_t char2; uint8_t char3; uint16_t short0; uint32_t int0;} instruction;
 
 typedef struct {
@@ -24,5 +24,10 @@ typedef struct {
 	uint8_t * binary;
 	int binarysz;
 } arm940t;
+
+typedef struct {
+    uint32_t shifter_operand;
+    uint32_t shifter_carry_out;
+} shifter_result;
 
 #endif /* TYPES_H_ */

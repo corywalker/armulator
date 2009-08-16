@@ -9,7 +9,9 @@ instruction parse_instruction(arm940t * cpu, uint32_t word)
 	if((get_bits(word, 26, 2) == 0) && (get_bits(word, 21, 4) == 13) &&
 		!(!get_bits(word, 25, 1) && get_bits(word, 4, 1) && get_bits(word, 7, 1)))
 	{
+		inst.group = 0;
 		inst.id = 1; //MOV
+		inst.char3 = get_bits(word, 21, 4); //opcode
 		inst.char0 = get_bits(word, 20, 1); //S
 		inst.char1 = get_bits(word, 16, 4); //SBZ
 		inst.char2 = get_bits(word, 12, 4); //Rd
@@ -19,7 +21,9 @@ instruction parse_instruction(arm940t * cpu, uint32_t word)
 	}
 	else if((get_bits(word, 26, 2) == 0) && (get_bits(word, 21, 4) == 4))
 	{
+		inst.group = 0;
 		inst.id = 2; //ADD
+		inst.char3 =
 		inst.char0 = get_bits(word, 20, 1); //S
 		inst.char1 = get_bits(word, 16, 4); //Rn
 		inst.char2 = get_bits(word, 12, 4); //Rd
@@ -29,6 +33,7 @@ instruction parse_instruction(arm940t * cpu, uint32_t word)
 	}
 	else if((get_bits(word, 26, 2) == 0) && (get_bits(word, 21, 4) == 10))
 	{
+		inst.group = 0;
 		inst.id = 3; //CMP
 		inst.char0 = get_bits(word, 16, 4); //Rn
 		inst.char1 = get_bits(word, 12, 4); //SBZ
@@ -38,6 +43,7 @@ instruction parse_instruction(arm940t * cpu, uint32_t word)
 	}
 	else if(get_bits(word, 25, 3) == 5)
 	{
+		inst.group = 1;
 		inst.id = 4; //B
 		inst.char0 = get_bits(word, 24, 1); //L
 		inst.int0 = get_bits(word, 0, 24); //target_address
@@ -66,7 +72,9 @@ void cycle(arm940t * cpu)
 					printf("Undefined\n");
 					break;
 				case 1:
-					cpu->R[cpu->decoded.char2] = addrmode1(cpu, cpu->decoded.word).shifter_operand;
+					process_opcode(cpu, cpu->decoded.char3, cpu->decoded.char2,
+						cpu->decoded.char1, addrmode1(cpu, cpu->decoded.word), cpu->decoded.char0);
+					//cpu->R[cpu->decoded.char2] = addrmode1(cpu, cpu->decoded.word).shifter_operand;
 					printf("R%u = %u\n", cpu->decoded.char2, cpu->R[cpu->decoded.char2]);
 					break;
 				case 2:
@@ -196,4 +204,91 @@ arm940t new_arm940t()
 void delete_arm940t(arm940t * cpu)
 {
 	free(cpu->binary);
+}
+
+void process_opcode(arm940t * cpu, uint8_t opcode, uint8_t rd, uint8_t rn, shifter_result shifted, uint8_t s)
+{
+	uint8_t td;
+
+	//printf("opcode: %u - rd: %u - rn: %u - s: %u", opcode, rd, rn, s);
+	//this sh needs to handle flags
+	switch (opcode) {
+	case 0: //AND
+		cpu->R[rd] = cpu->R[rn] & shifted.shifter_operand;
+		break;
+	case 1: //EOR
+		cpu->R[rd] = cpu->R[rn] ^ shifted.shifter_operand;
+		break;
+	case 2: //SUB
+		if (s)
+			set_c(&cpu->CPSR, cpu->R[rn] >= shifted.shifter_operand); //rd can equal rn dipsh
+		cpu->R[rd] = cpu->R[rn] - shifted.shifter_operand;
+		break;
+	case 3: //RSB
+		cpu->R[rd] = shifted.shifter_operand - cpu->R[rn];
+		break;
+	case 4: //ADD
+		cpu->R[rd] = cpu->R[rn] + shifted.shifter_operand;
+		break;
+	case 5: //ADC
+		cpu->R[rd] = cpu->R[rn] + shifted.shifter_operand + get_c(&cpu->CPSR);
+		break;
+	case 6: //SBC
+		cpu->R[rd] = cpu->R[rn] - shifted.shifter_operand - (!get_c(&cpu->CPSR));
+		break;
+	case 7: //RSC
+		cpu->R[rd] = shifted.shifter_operand - cpu->R[rn] - (!get_c(&cpu->CPSR));
+		break;
+	case 8: //TST
+		td = cpu->R[rn] & shifted.shifter_operand;
+		break;
+	case 9: //TEQ
+		td = cpu->R[rn] ^ shifted.shifter_operand;
+		break;
+	case 10: //CMP
+		td = cpu->R[rn] - shifted.shifter_operand;
+		set_c(&cpu->CPSR, cpu->R[rn] >= shifted.shifter_operand);
+		//C=~(td>cpu->R[rn]);
+		break;
+	case 11: //CMN
+		td = cpu->R[rn] + shifted.shifter_operand;
+		break;
+	case 12: //ORR
+		cpu->R[rd] = shifted.shifter_operand | cpu->R[rn];
+		break;
+	case 13: //MOV
+		cpu->R[rd] = shifted.shifter_operand;
+		set_c(&cpu->CPSR, shifted.shifter_carry_out);
+		break;
+	case 14: //BIC
+		cpu->R[rd] = cpu->R[rn] & (~shifted.shifter_operand);
+		break;
+	case 15: //MVN
+		cpu->R[rd] = ~shifted.shifter_operand;
+		break;
+	}
+	if (opcode >= 8 && opcode <= 11) {
+		if (td >> 31 == 1)
+			set_n(&cpu->CPSR, 1);
+		else
+			set_n(&cpu->CPSR, 0);
+		if (td == 0)
+			set_z(&cpu->CPSR, 1);
+		else
+			set_z(&cpu->CPSR, 0);
+		//sprintf(cr, "Z=%d N=%d C=%d V=%d", get_z(&cpu->CPSR), get_n(&cpu->CPSR), get_c(&cpu->CPSR), get_v(&cpu->CPSR));
+		return;
+	}
+	if (s) {
+		if (cpu->R[rd] >> 31 == 1)
+			set_n(&cpu->CPSR, 1);
+		else
+			set_n(&cpu->CPSR, 0);
+		if (cpu->R[rd] == 0)
+			set_z(&cpu->CPSR, 1);
+		else
+			set_z(&cpu->CPSR, 0);
+	}
+	//sprintf(cr, "%s=0x%X", arm_reg[rd], cpu->R[rd]);
+	//if(rd==15) PC+=4;    //da ARM
 }

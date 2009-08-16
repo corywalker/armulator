@@ -14,11 +14,6 @@
 //#include "cpsr.h"
 #include <stdint.h>
 
-typedef struct
-{
-    uint32_t shifter_operand;
-    uint32_t shifter_carry_out;
-} shifter_result;
 
 shifter_result addrmode1(arm940t * cpu, uint32_t word);
 shifter_result adr1_imm(arm940t * cpu, uint32_t word);

@@ -31,6 +31,10 @@ void debug(arm940t * cpu)
 {
 	// Cycles until the end of the program is reached
 	while(cpu->R[15] < cpu->binarysz+8)
+	{
 		cycle(cpu);
+		//for step by step:
+		//getchar();
+	}
 	printf("Execution complete\n");
 }
