@@ -6,57 +6,39 @@ instruction parse_instruction(arm940t * cpu, uint32_t word)
 	inst.word = word;
 	inst.cond = word >> 28;
 
-	if((get_bits(word, 26, 2) == 0) && (get_bits(word, 21, 4) == 13) &&
-		!(!get_bits(word, 25, 1) && get_bits(word, 4, 1) && get_bits(word, 7, 1)))
-	{
+	uint32_t word_adj = word;
+    if(inst.cond!=0xF) word_adj&=0x0FFFFFFF;         //Condition is already accounted for
+    //printf("%8.8X\n",instruction&0xFE000000);
+         if(word_adj==0x0AFFFFFE) printf("HALT");
+    else if(word_adj==0x01A00000) printf("NOP");
+    //else if((word_adj&0xFE000090)==0x00000090) //arm_mels(word_adj&~(0xFE000090));           //Multiplies, extra loads/stores
+    //else if((word_adj&0xFF900000)==0x01000000) //  arm_mi(word_adj&~(0xFF900000));           //Miscellaneous instructions
+    else if(((word_adj&0xFE000010)==0x00000000)||((word_adj&0xFE000090)==0x00000010)||((word_adj&0xFE000000)==0x02000000)) { //arm_dpis(word_adj&~(0xFE000010));           //Data Processing immediate shift
 		inst.group = 0;
-		inst.id = 1; //MOV
 		inst.char3 = get_bits(word, 21, 4); //opcode
 		inst.char0 = get_bits(word, 20, 1); //S
 		inst.char1 = get_bits(word, 16, 4); //SBZ
 		inst.char2 = get_bits(word, 12, 4); //Rd
 		inst.short0 = get_bits(word, 0, 12); //shifter_operand
-		print_inst("mov", inst.cond, inst.char0);
-		printf(" R%i, %u\n", inst.char2, inst.short0);
-	}
-	else if((get_bits(word, 26, 2) == 0) && (get_bits(word, 21, 4) == 4))
-	{
-		inst.group = 0;
-		inst.id = 2; //ADD
-		inst.char3 = get_bits(word, 21, 4); //opcode
-		inst.char0 = get_bits(word, 20, 1); //S
-		inst.char1 = get_bits(word, 16, 4); //Rn
-		inst.char2 = get_bits(word, 12, 4); //Rd
-		inst.short0 = get_bits(word, 0, 12); //shifter_operand
-		print_inst("add", inst.cond, inst.char0);
-		printf(" R%i, R%i, %u\n", inst.char2, inst.char1, inst.short0);
-	}
-	else if((get_bits(word, 26, 2) == 0) && (get_bits(word, 21, 4) == 10))
-	{
-		inst.group = 0;
-		inst.id = 3; //CMP
-		inst.char3 = get_bits(word, 21, 4); //opcode
-		inst.char0 = 1; //todo: sbit!!!!!
-		inst.char1 = get_bits(word, 16, 4); //Rn
-		inst.char2 = get_bits(word, 12, 4); //SBZ
-		inst.short0 = get_bits(word, 0, 12); //shifter_operand
-		print_inst("cmp", inst.cond, 0);
-		printf(" R%i, %u\n", inst.char0, inst.short0);
-	}
-	else if(get_bits(word, 25, 3) == 5)
-	{
+		print_instruction(inst);
+    }
+    //else if((word_adj&0xFF980000)==0x03200000) //arm_misr(word_adj&~(0xFF980000));           //Move immediate to status register
+    //else if((word_adj&0xFE000000)==0x04000000) //arm_lsio(word_adj&~(0xFE000000));           //Load/store immediate offset
+    //else if((word_adj&0xFE000010)==0x06000000) //arm_lsro(word_adj&~(0xFE000010));           //Load/store register offset
+    //else if((word_adj&0xFE000000)==0x08000000) // arm_lsm(word_adj&~(0xFE000000));           //Load/store multiple
+    else if((word_adj&0xFE000000)==0x0A000000) { //   arm_b(word_adj&~(0xFE000000));           //Branch and branch with link
 		inst.group = 1;
-		inst.id = 4; //B
 		inst.char0 = get_bits(word, 24, 1); //L
 		inst.int0 = get_bits(word, 0, 24); //target_address
-		print_inst("b", inst.cond, inst.char0);
-		printf(" %u\n", inst.int0);
-	}
-	else
-	{
-		inst.id = 0; //undefined
-		printf("other\n");
-	}
+		print_instruction(inst);
+    }
+    //else if((word_adj&0xFE000000)==0xFA000000) // arm_b_t(word_adj&~(0xFE000000));           //Branch and branch with link and change to Thumb(only one that uses 0xF)
+    //else if((word_adj&0xFF000000)==0x0F000000) // arm_swi(word_adj&~(0xFF000000));           //Software interrupt
+    //else if((word_adj&0xFE000000)==0x0C000000) //arm_cpls(word_adj&~(0xFE000000));           //Coprocessor load/store and double register transfers
+    //else if((word_adj&0xFF000000)==0x0E000000) // arm_cdp(word_adj&~(0xFF000000));           //Coprocessor data processing
+    //else if((word_adj&0xFF000000)==0x0E000000) // arm_crt(word_adj&~(0xFF000000));           //Coprocessor register transfers
+    else printf("Undefined instruction\n"); //instruction didn't match any previous profiles
+
 	return inst;
 }
 
@@ -109,7 +91,7 @@ void cycle(arm940t * cpu)
 	cpu->R[15] += 4;
 }
 
-void print_inst(char line[], uint8_t cond, uint8_t sbit)
+void print_operation(char line[], uint8_t cond, uint8_t sbit)
 {
 	printf("%s", line);
 	const char arm_cond[16][3]={"eq","ne","hs","lo","mi","pl","vs","vc","hi",
@@ -274,9 +256,40 @@ void process_opcode(arm940t * cpu, uint8_t opcode, uint8_t rd, uint8_t rn, shift
 		return; // do not execute the s updates
 	}
 	if (s) {
-		set_n(&cpu->CPSR, cpu->R[rd] >> 31 == 1); // todo: look up how s updates differ
+		set_n(&cpu->CPSR, cpu->R[rd] >> 31 == 1); // todo: look up how s updates differ between opcodes
 		set_z(&cpu->CPSR, cpu->R[rd] == 0); // todo: add s update debug printf
 	}
 	//sprintf(cr, "%s=0x%X", arm_reg[rd], cpu->R[rd]);
 	//if(rd==15) PC+=4;    //da ARM
+}
+
+void print_instruction(instruction inst)
+{
+	switch (inst.group) {
+	case 0: { //data processing
+		switch (inst.char3) {//opcode
+		case 13: //AND
+			print_operation("mov", inst.cond, inst.char0);//todo rename
+			printf(" R%i, %u\n", inst.char2, inst.short0);
+			break;
+		case 4:
+			print_operation("add", inst.cond, inst.char0);
+			printf(" R%i, R%i, %u\n", inst.char2, inst.char1, inst.short0);
+			break;
+		case 10:
+			print_operation("cmp", inst.cond, 0);
+			printf(" R%i, %u\n", inst.char0, inst.short0);
+			break;
+		default:
+			printf("Printing not defined for this opcode");
+		}
+		break;
+	}
+	case 1:
+		print_operation("b", inst.cond, inst.char0);
+		printf(" %u\n", inst.int0);
+		break;
+	default:
+		printf("Printing not defined for this group");
+	}
 }
