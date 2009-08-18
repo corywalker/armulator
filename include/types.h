@@ -21,6 +21,8 @@ typedef struct {
 	instruction decoded;
 	uint8_t have_fetched;
 	uint8_t have_decoded;
+	uint8_t * memory;
+	uint32_t memorysz;
 	uint8_t * binary;
 	int binarysz;
 } arm940t;
